@@ -25,6 +25,7 @@ class DownloadPolicyTest {
         assertNull(DownloadPolicy.validateMediaUrlForTest("https://cdn.example/movie.torrent"))
         assertNull(DownloadPolicy.validateMediaUrlForTest("https://localhost/video.mp4"))
         assertNull(DownloadPolicy.validateMediaUrlForTest("https://127.0.0.1/video.mp4"))
+        assertNull(DownloadPolicy.validateMediaUrlForTest("https://[::1]/video.mp4"))
     }
 
     @Test
