@@ -189,6 +189,7 @@ fun StremioMobileApp(viewModel: MainViewModel) {
                     query = state.searchQuery,
                     results = state.searchResults,
                     shelves = state.searchShelves,
+                    suggestion = state.searchSuggestion,
                     onQueryChange = viewModel::search,
                     onOpenDetails = viewModel::openDetails,
                     onOpenDiscoverCatalog = viewModel::openDiscoverCatalog,
