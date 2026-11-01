@@ -29,6 +29,7 @@ internal object DownloadPolicy {
             host.equals("localhost", ignoreCase = true) ||
             host.endsWith(".localhost", ignoreCase = true) ||
             host.endsWith(".local", ignoreCase = true) ||
+            host.contains(":") || // IPv6 literals, including loopback
             host.matches(Regex("""\d{1,3}(?:\.\d{1,3}){3}""")) ||
             extension !in supportedExtensions
         ) {
