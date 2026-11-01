@@ -242,7 +242,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Compile, test, and assemble debug APKs
-        run: ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:assembleDebug --warning-mode all
+        run: ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:assembleDebug --warning-mode all --no-configuration-cache
 
       - name: Verify native libraries inside every APK
         shell: bash
