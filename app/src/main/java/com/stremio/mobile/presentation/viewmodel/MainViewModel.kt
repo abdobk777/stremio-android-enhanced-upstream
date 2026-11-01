@@ -1,6 +1,9 @@
 package com.stremio.mobile.presentation.viewmodel
 
 import android.content.Context
+import android.app.DownloadManager
+import android.os.Environment
+import android.widget.Toast
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -30,6 +33,7 @@ import com.stremio.mobile.update.UpdateInfo
 import com.stremio.mobile.update.UpdateRepository
 import com.stremio.mobile.update.UpdateState
 import com.stremio.mobile.search.TitleFuzzyMatcher
+import com.stremio.mobile.download.DownloadPolicy
 
 import java.io.File
 import java.net.HttpURLConnection
@@ -1319,6 +1323,43 @@ class MainViewModel(
         streamsJob?.cancel()
         streamsJob = null
         streams.value = StreamsUiState()
+    }
+
+    fun downloadStream(option: StreamOption) {
+        val url = DownloadPolicy.directDownloadUrl(option.core.stream)
+        if (url == null) {
+            Toast.makeText(appContext, "This stream is not a direct downloadable video file.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val fileName = DownloadPolicy.fileName(option.name, url, System.currentTimeMillis())
+        if (fileName == null) {
+            Toast.makeText(appContext, "This file type cannot be downloaded.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val manager = appContext.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
+        if (manager == null) {
+            Toast.makeText(appContext, "Android Download Manager is unavailable.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        runCatching {
+            val request = DownloadManager.Request(Uri.parse(url)).apply {
+                setTitle(option.name.take(120))
+                setDescription("Offline download · ${option.addonTitle}")
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setAllowedOverMetered(true)
+                setAllowedOverRoaming(false)
+                setDestinationInExternalFilesDir(appContext, Environment.DIRECTORY_DOWNLOADS, fileName)
+            }
+            manager.enqueue(request)
+        }.onSuccess {
+            Toast.makeText(appContext, "Download queued. Track progress in notifications.", Toast.LENGTH_LONG).show()
+        }.onFailure {
+            Timber.e(it, "Unable to queue offline download")
+            Toast.makeText(appContext, "Could not start this download.", Toast.LENGTH_LONG).show()
+        }
     }
 
     fun playStream(option: StreamOption) {
