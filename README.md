@@ -180,8 +180,8 @@ adb uninstall com.stremio.mobile
 GitHub Actions workflows are included:
 
 - `android-ci.yml` builds, verifies, and uploads debug APK artifacts for `armeabi-v7a`, `arm64-v8a`, `x86`, `x86_64`, and universal output.
-- `android-pr-checks.yml` validates the Gradle wrapper, compiles debug Kotlin, and runs JVM unit tests for pull requests.
-- `android-nightly.yml` builds and uploads scheduled/manual debug APK artifacts for quick smoke testing.
+- `android-pr-checks.yml` calls the shared native-aware debug build: it builds the Rust stream-server JNI library for all four Android ABIs, runs Kotlin compilation and JVM unit tests, assembles APKs, and verifies that each APK contains its required native libraries.
+- `android-ci.yml` and `android-nightly.yml` use the same native-aware build pipeline for main-branch and scheduled/manual builds. The nightly workflow uploads debug APKs for smoke testing.
 - `android-lint-diagnostics.yml` runs Android Lint manually and uploads reports without blocking the branch while the existing lint backlog is cleaned up.
 - `release-apk.yml` builds signed split APKs, generates SHA256 checksums, uploads mapping output, and publishes all assets to GitHub Releases.
 
@@ -200,30 +200,31 @@ To create the base64 keystore secret from PowerShell:
 
 ## Native Libraries
 
-Prebuilt native outputs are committed for supported ABIs:
+The Rust stream-server is a required runtime dependency for torrent streaming. Its `libstream_server.so` file is generated for each supported ABI during CI and staged into `app/src/main/jniLibs` before the APK is packaged.
+
+The APK build verifies all four server libraries before Gradle's `preBuild` phase. It fails with the missing ABI paths instead of silently producing an APK that falls back to the unavailable-server stub.
+
+The Kotlin Stremio core bridge and the vendored MPV module include their own checked-in native outputs. The app-packaged `libc++_shared.so` runtime is also checked for every ABI.
+
+Supported Android ABIs:
 
 - `armeabi-v7a`
 - `arm64-v8a`
 - `x86`
 - `x86_64`
 
-The universal APK contains all supported ABIs. ABI-specific APKs are smaller and should be preferred when the device architecture is known.
-
-The MPV module intentionally excludes `libc++_shared.so` and uses the app-packaged C++ runtime.
-
-Native rebuild helpers:
+For local stream-server native builds, install Rust stable, the four Android Rust targets, `cargo-ndk 4.1.2`, Android NDK r27c, and vcpkg at the stream-server's pinned baseline. Configure the four Android vcpkg triplets and their installed directories as shown in `.github/workflows/android-debug-build.yml`. Then run:
 
 ```powershell
-.\gradlew compileNativeLibs
+.\gradlew :app:copyStreamServerJniLibs
+.\gradlew :app:assembleDebug
 ```
 
-MPV native rebuilds are handled separately through:
+The root `compileNativeLibs` helper also rebuilds the Stremio core JNI bridge. MPV native rebuilds are handled separately through:
 
 ```bash
 third_party/mpv-android-lib/rebuild-native.sh
 ```
-
-The MPV rebuild script is intended for Linux/macOS environments. stream-server native builds can be run per ABI through the Gradle `copyStreamServerJniLibs` helper; Gradle can run those native ABI tasks in parallel when invoked with `--parallel`.
 
 ## Development Notes
 
