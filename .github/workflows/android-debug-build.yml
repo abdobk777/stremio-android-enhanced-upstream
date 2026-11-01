@@ -154,7 +154,6 @@ jobs:
       - name: Build stream-server JNI library
         working-directory: stream-server/server
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
           VCPKG_ROOT: ${{ runner.temp }}/vcpkg
           VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed-${{ matrix.abi }}
           VCPKGRS_TRIPLET: ${{ matrix.vcpkg-triplet }}
@@ -162,7 +161,10 @@ jobs:
           PKG_CONFIG_PATH: ${{ github.workspace }}/vcpkg_installed-${{ matrix.abi }}/${{ matrix.vcpkg-triplet }}/lib/pkgconfig
           PKG_CONFIG_SYSROOT_DIR: ${{ github.workspace }}/vcpkg_installed-${{ matrix.abi }}/${{ matrix.vcpkg-triplet }}
           OPENSSL_DIR: ${{ github.workspace }}/vcpkg_installed-${{ matrix.abi }}/${{ matrix.vcpkg-triplet }}
-        run: cargo ndk --target ${{ matrix.rust-target }} --platform 24 build --release --features libtorrent --no-default-features --locked
+        run: |
+          set -euo pipefail
+          export ANDROID_NDK_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}/ndk/27.2.12479018"
+          cargo ndk --target ${{ matrix.rust-target }} --platform 24 build --release --features libtorrent --no-default-features --locked
 
       - name: Verify and stage JNI library
         shell: bash
