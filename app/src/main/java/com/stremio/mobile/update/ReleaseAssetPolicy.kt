@@ -31,6 +31,25 @@ internal fun isTrustedReleaseAssetUrl(value: String): Boolean {
 }
 
 /**
+ * GitHub release asset URLs redirect to GitHub-owned asset delivery hosts.
+ * Each redirect target is checked before the next request is made.
+ */
+internal fun isTrustedReleaseDeliveryUrl(value: String): Boolean {
+    val uri = runCatching { URI(value) }.getOrNull() ?: return false
+    val host = uri.host ?: return false
+    if (!uri.scheme.equals("https", ignoreCase = true) ||
+        uri.userInfo != null ||
+        (uri.port != -1 && uri.port != 443)
+    ) {
+        return false
+    }
+
+    return isTrustedReleaseAssetUrl(value) ||
+        host.equals("release-assets.githubusercontent.com", ignoreCase = true) ||
+        host.equals("objects.githubusercontent.com", ignoreCase = true)
+}
+
+/**
  * Reads a standard sha256sum entry and returns the lowercase digest for the exact asset name.
  * Lines for other files and malformed digests are ignored.
  */
