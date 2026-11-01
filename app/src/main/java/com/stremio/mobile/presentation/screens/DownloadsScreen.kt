@@ -148,7 +148,7 @@ private fun DownloadRow(entry: DownloadEntry, onOpen: () -> Unit, onRemove: () -
     } else 0f
     val statusText = when {
         complete -> "Completed"
-        failed -> "Failed · \${downloadReason(entry.reason)}"
+        failed -> "Failed · ${downloadReason(entry.reason)}"
         entry.status == DownloadManager.STATUS_PAUSED -> "Paused"
         entry.status == DownloadManager.STATUS_PENDING -> "Waiting"
         running -> "Downloading"
@@ -171,7 +171,7 @@ private fun DownloadRow(entry: DownloadEntry, onOpen: () -> Unit, onRemove: () -
         if (running) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
         Text(
             if (entry.totalBytes > 0) {
-                "\${statusText} · \${formatBytes(entry.downloadedBytes)} / \${formatBytes(entry.totalBytes)}"
+                "${statusText} · ${formatBytes(entry.downloadedBytes)} / ${formatBytes(entry.totalBytes)}"
             } else statusText,
             fontSize = 12.sp,
         )
@@ -192,7 +192,7 @@ private fun openDownloadedFile(context: Context, uri: Uri) {
 }
 
 private fun formatBytes(bytes: Long): String {
-    if (bytes < 1024) return "\${bytes} B"
+    if (bytes < 1024) return "${bytes} B"
     val kb = bytes / 1024.0
     if (kb < 1024) return String.format("%.1f KB", kb)
     val mb = kb / 1024.0
@@ -210,5 +210,5 @@ private fun downloadReason(reason: Int): String = when (reason) {
     DownloadManager.ERROR_TOO_MANY_REDIRECTS -> "Too many redirects"
     DownloadManager.ERROR_UNHANDLED_HTTP_CODE -> "Server error"
     DownloadManager.ERROR_UNKNOWN -> "Unknown error"
-    else -> "Code \${reason}"
+    else -> "Code ${reason}"
 }
