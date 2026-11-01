@@ -122,13 +122,12 @@ class UpdateRepository(private val context: Context) {
             partial.delete()
         }
 
-        val connection = (URL(info.apkUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 15_000
-            readTimeout = 30_000
-            setRequestProperty("Accept", "application/vnd.android.package-archive")
-            setRequestProperty("User-Agent", "StremioMobile/${BuildConfig.VERSION_NAME}")
-        }
+        val connection = openTrustedReleaseAssetConnection(
+            initialUrl = info.apkUrl,
+            accept = "application/vnd.android.package-archive",
+            connectTimeoutMs = 15_000,
+            readTimeoutMs = 30_000,
+        )
 
         connection.use {
             if (it.responseCode !in 200..299) {
@@ -186,13 +185,12 @@ class UpdateRepository(private val context: Context) {
         if (!isTrustedReleaseAssetUrl(checksumUrl)) {
             throw SecurityException("Refusing to fetch an untrusted checksum URL.")
         }
-        val connection = (URL(checksumUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 10_000
-            readTimeout = 10_000
-            setRequestProperty("Accept", "text/plain")
-            setRequestProperty("User-Agent", "StremioMobile/${BuildConfig.VERSION_NAME}")
-        }
+        val connection = openTrustedReleaseAssetConnection(
+            initialUrl = checksumUrl,
+            accept = "text/plain",
+            connectTimeoutMs = 10_000,
+            readTimeoutMs = 10_000,
+        )
 
         return connection.use {
             if (it.responseCode !in 200..299) {
@@ -202,6 +200,49 @@ class UpdateRepository(private val context: Context) {
             parseExpectedSha256(checksumText, apkName)
                 ?: throw IllegalStateException("Release checksum file has no valid entry for ${apkName}.")
         }
+    }
+
+    private fun openTrustedReleaseAssetConnection(
+        initialUrl: String,
+        accept: String,
+        connectTimeoutMs: Int,
+        readTimeoutMs: Int,
+    ): HttpURLConnection {
+        var currentUrl = URL(initialUrl)
+
+        repeat(MAX_RELEASE_REDIRECTS + 1) { redirectIndex ->
+            val connection = (currentUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                instanceFollowRedirects = false
+                connectTimeout = connectTimeoutMs
+                readTimeout = readTimeoutMs
+                setRequestProperty("Accept", accept)
+                setRequestProperty("User-Agent", "StremioMobile/${BuildConfig.VERSION_NAME}")
+            }
+
+            val status = connection.responseCode
+            if (status in 300..399) {
+                val location = connection.getHeaderField("Location")
+                connection.disconnect()
+                if (location.isNullOrBlank() || redirectIndex == MAX_RELEASE_REDIRECTS) {
+                    throw IllegalStateException("GitHub release asset redirect could not be validated.")
+                }
+
+                val nextUrl = URL(currentUrl, location)
+                if (!isTrustedReleaseDeliveryUrl(nextUrl.toString())) {
+                    throw SecurityException("Release asset redirected to an untrusted host.")
+                }
+                currentUrl = nextUrl
+            } else {
+                if (!isTrustedReleaseDeliveryUrl(currentUrl.toString())) {
+                    connection.disconnect()
+                    throw SecurityException("Release asset resolved to an untrusted host.")
+                }
+                return connection
+            }
+        }
+
+        throw IllegalStateException("Too many GitHub release asset redirects.")
     }
 
     private fun File.sha256(): String {
@@ -241,6 +282,7 @@ class UpdateRepository(private val context: Context) {
 
     companion object {
         private const val LATEST_RELEASE_URL = "https://api.github.com/repos/perpetus/stremio-android/releases/latest"
+        private const val MAX_RELEASE_REDIRECTS = 5
         private val SEMVER_REGEX = Regex("""\d+\.\d+\.\d+""")
     }
 }
