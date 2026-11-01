@@ -1,0 +1,274 @@
+name: Android Debug Build
+
+on:
+  workflow_call:
+    inputs:
+      artifact_name:
+        description: Name for the packaged debug APK artifact
+        required: true
+        type: string
+      retention_days:
+        description: Number of days to retain the debug APK artifact
+        required: false
+        default: 7
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  build-stream-server:
+    name: Build Stream Server (${{ matrix.abi }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: armeabi-v7a
+            rust-target: armv7-linux-androideabi
+            vcpkg-triplet: arm-android
+            vcpkg-arch: arm
+            make-host: armv7a-linux-androideabi
+          - abi: arm64-v8a
+            rust-target: aarch64-linux-android
+            vcpkg-triplet: arm64-android
+            vcpkg-arch: arm64
+            make-host: aarch64-linux-android
+          - abi: x86
+            rust-target: i686-linux-android
+            vcpkg-triplet: x86-android
+            vcpkg-arch: x86
+            make-host: i686-linux-android
+          - abi: x86_64
+            rust-target: x86_64-linux-android
+            vcpkg-triplet: x64-android
+            vcpkg-arch: x64
+            make-host: x86_64-linux-android
+
+    steps:
+      - name: Checkout pinned stream-server source
+        uses: actions/checkout@v5
+        with:
+          repository: stremio-native/stream-server
+          ref: 368666eb09f9c4849a7df7f2a6a8b26171f24cfb
+          path: stream-server
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install host build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential cmake curl git ninja-build pkg-config python3 tar unzip zip
+
+      - name: Install Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "${sdk_root}" ]]; then
+            echo "::error::ANDROID_HOME or ANDROID_SDK_ROOT is not set on this runner."
+            exit 1
+          fi
+
+          sdkmanager_path="$(find "${sdk_root}/cmdline-tools" -type f -name sdkmanager -print 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -z "${sdkmanager_path}" ]]; then
+            sdkmanager_path="$(command -v sdkmanager || true)"
+          fi
+          if [[ -z "${sdkmanager_path}" ]]; then
+            echo "::error::Android sdkmanager was not found."
+            exit 1
+          fi
+
+          yes | "${sdkmanager_path}" --sdk_root="${sdk_root}" --licenses >/dev/null
+          "${sdkmanager_path}" --sdk_root="${sdk_root}" --install "ndk;27.2.12479018"
+          echo "ANDROID_NDK_HOME=${sdk_root}/ndk/27.2.12479018" >> "${GITHUB_ENV}"
+
+      - name: Install Rust and Android target
+        shell: bash
+        env:
+          RUST_TARGET: ${{ matrix.rust-target }}
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable --target "${RUST_TARGET}"
+          echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 4.1.2 --locked
+
+      - name: Set up pinned vcpkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/microsoft/vcpkg.git "${RUNNER_TEMP}/vcpkg"
+          git -C "${RUNNER_TEMP}/vcpkg" checkout 84bab45d415d22042bd0b9081aea57f362da3f35
+          "${RUNNER_TEMP}/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+
+      - name: Create Android vcpkg triplet
+        shell: bash
+        env:
+          ABI: ${{ matrix.abi }}
+          VCPKG_TRIPLET: ${{ matrix.vcpkg-triplet }}
+          VCPKG_ARCH: ${{ matrix.vcpkg-arch }}
+          MAKE_HOST: ${{ matrix.make-host }}
+        working-directory: stream-server
+        run: |
+          set -euo pipefail
+          mkdir -p triplets
+          cat > "triplets/${VCPKG_TRIPLET}.cmake" <<EOF
+          set(VCPKG_TARGET_ARCHITECTURE ${VCPKG_ARCH})
+          set(VCPKG_CRT_LINKAGE dynamic)
+          set(VCPKG_LIBRARY_LINKAGE static)
+          set(VCPKG_CMAKE_SYSTEM_NAME Android)
+          set(VCPKG_CMAKE_SYSTEM_VERSION 24)
+          set(VCPKG_MAKE_BUILD_TRIPLET "--host=${MAKE_HOST}")
+          EOF
+
+          if [[ "${ABI}" == "armeabi-v7a" ]]; then
+            echo 'set(VCPKG_CMAKE_CONFIGURE_OPTIONS -DANDROID_ABI=armeabi-v7a -DANDROID_ARM_NEON=ON)' >> "triplets/${VCPKG_TRIPLET}.cmake"
+          else
+            echo "set(VCPKG_CMAKE_CONFIGURE_OPTIONS -DANDROID_ABI=${ABI})" >> "triplets/${VCPKG_TRIPLET}.cmake"
+          fi
+
+      - name: Install Android native dependencies
+        working-directory: stream-server
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+          VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed-${{ matrix.abi }}
+          VCPKG_TRIPLET: ${{ matrix.vcpkg-triplet }}
+        run: |
+          set -euo pipefail
+          "${VCPKG_ROOT}/vcpkg" install \
+            --triplet "${VCPKG_TRIPLET}" \
+            --x-install-root="${VCPKG_INSTALLED_DIR}" \
+            --overlay-triplets=triplets \
+            --overlay-ports=vcpkg-overlays
+          test -d "${VCPKG_INSTALLED_DIR}/${VCPKG_TRIPLET}/include/openssl"
+          test -d "${VCPKG_INSTALLED_DIR}/${VCPKG_TRIPLET}/lib"
+
+      - name: Build stream-server JNI library
+        working-directory: stream-server/server
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+          VCPKG_ROOT: ${{ runner.temp }}/vcpkg
+          VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed-${{ matrix.abi }}
+          VCPKGRS_TRIPLET: ${{ matrix.vcpkg-triplet }}
+          PKG_CONFIG_ALLOW_CROSS: "1"
+          PKG_CONFIG_PATH: ${{ github.workspace }}/vcpkg_installed-${{ matrix.abi }}/${{ matrix.vcpkg-triplet }}/lib/pkgconfig
+          PKG_CONFIG_SYSROOT_DIR: ${{ github.workspace }}/vcpkg_installed-${{ matrix.abi }}/${{ matrix.vcpkg-triplet }}
+          OPENSSL_DIR: ${{ github.workspace }}/vcpkg_installed-${{ matrix.abi }}/${{ matrix.vcpkg-triplet }}
+        run: cargo ndk --target ${{ matrix.rust-target }} --platform 24 build --release --features libtorrent --no-default-features --locked
+
+      - name: Verify and stage JNI library
+        shell: bash
+        env:
+          ABI: ${{ matrix.abi }}
+          RUST_TARGET: ${{ matrix.rust-target }}
+        run: |
+          set -euo pipefail
+          library="stream-server/target/${RUST_TARGET}/release/libstream_server.so"
+          test -s "${library}"
+          readelf -h "${library}"
+          mkdir -p "jniLibs/${ABI}"
+          cp "${library}" "jniLibs/${ABI}/libstream_server.so"
+
+      - name: Upload stream-server JNI library
+        uses: actions/upload-artifact@v6
+        with:
+          name: stream-server-jniLibs-${{ matrix.abi }}
+          path: jniLibs/
+          if-no-files-found: error
+          retention-days: 1
+
+  build-debug-apks:
+    name: Test and Package Debug APKs
+    runs-on: ubuntu-24.04
+    needs: build-stream-server
+    timeout-minutes: 90
+    steps:
+      - name: Checkout Android project and submodules
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Download stream-server JNI libraries
+        uses: actions/download-artifact@v7
+        with:
+          pattern: stream-server-jniLibs-*
+          path: app/src/main/jniLibs/
+          merge-multiple: true
+
+      - name: Verify staged native libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for abi in armeabi-v7a arm64-v8a x86 x86_64; do
+            library="app/src/main/jniLibs/${abi}/libstream_server.so"
+            test -s "${library}" || {
+              echo "::error::Missing required JNI library: ${library}"
+              exit 1
+            }
+            test -s "app/src/main/jniLibs/${abi}/libc++_shared.so" || {
+              echo "::error::Missing C++ runtime for ABI ${abi}"
+              exit 1
+            }
+          done
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      - name: Compile, test, and assemble debug APKs
+        run: ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:assembleDebug --warning-mode all
+
+      - name: Verify native libraries inside every APK
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          apk_dir = Path("app/build/outputs/apk/debug")
+          expected = {
+              "app-armeabi-v7a-debug.apk": {"armeabi-v7a"},
+              "app-arm64-v8a-debug.apk": {"arm64-v8a"},
+              "app-x86-debug.apk": {"x86"},
+              "app-x86_64-debug.apk": {"x86_64"},
+              "app-universal-debug.apk": {"armeabi-v7a", "arm64-v8a", "x86", "x86_64"},
+          }
+
+          for apk_name, abis in expected.items():
+              apk_path = apk_dir / apk_name
+              if not apk_path.is_file():
+                  raise SystemExit(f"Missing expected APK: {apk_path}")
+              with ZipFile(apk_path) as apk:
+                  entries = set(apk.namelist())
+                  for abi in abis:
+                      for library in ("libstream_server.so", "libc++_shared.so"):
+                          entry = f"lib/{abi}/{library}"
+                          if entry not in entries:
+                              raise SystemExit(f"{apk_name} is missing {entry}")
+              print(f"Verified {apk_name}: {', '.join(sorted(abis))}")
+
+          print("All debug APKs contain the required stream-server JNI libraries.")
+          PY
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
