@@ -147,6 +147,9 @@ jobs:
           VCPKG_TRIPLET: ${{ matrix.vcpkg-triplet }}
         run: |
           set -euo pipefail
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "${sdk_root}"
+          export ANDROID_NDK_HOME="${sdk_root}/ndk/27.2.12479018"
           "${VCPKG_ROOT}/vcpkg" install \
             --triplet "${VCPKG_TRIPLET}" \
             --x-install-root="${VCPKG_INSTALLED_DIR}" \
