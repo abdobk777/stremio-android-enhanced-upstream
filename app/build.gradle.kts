@@ -179,7 +179,12 @@ val streamServerRoot = when {
     submoduleStreamServerRoot.resolve("server/Cargo.toml").isFile -> submoduleStreamServerRoot
     else -> externalStreamServerRoot
 }
-val vcpkgRoot = stringPropertyOrEnv("VCPKG_ROOT") ?: "C:\\vcpkg"
+val defaultVcpkgRoot = if (org.apache.tools.ant.taskdefs.condition.Os.isFamily(org.apache.tools.ant.taskdefs.condition.Os.FAMILY_WINDOWS)) {
+    "C:/vcpkg"
+} else {
+    file("${System.getProperty("user.home")}/vcpkg").absolutePath
+}
+val vcpkgRoot = stringPropertyOrEnv("VCPKG_ROOT") ?: defaultVcpkgRoot
 
 streamServerTargets.forEach { target ->
     tasks.register<Exec>("buildStreamServer${target.taskSuffix}") {
