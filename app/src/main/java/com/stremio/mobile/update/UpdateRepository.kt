@@ -18,7 +18,7 @@ data class UpdateInfo(
     val tagName: String,
     val apkName: String,
     val apkUrl: String,
-    val sha256Url: String?,
+    val sha256Url: String,
     val releaseNotes: String,
 )
 
@@ -81,7 +81,14 @@ class UpdateRepository(private val context: Context) {
             val apkAsset = selectApkAsset(parsedAssets)
                 ?: return@withContext UpdateState.Error("No compatible APK found for this device.")
             val checksumAsset = parsedAssets.firstOrNull { asset ->
-                asset.name.endsWith("-SHA256SUMS.txt", ignoreCase = true)
+                asset.name == "StremioMobile-v${remoteVersion}-SHA256SUMS.txt"
+            } ?: return@withContext UpdateState.Error("Latest release is missing its SHA-256 checksum file.")
+
+            if (!isSafeApkAssetName(apkAsset.name) ||
+                !isTrustedReleaseAssetUrl(apkAsset.url) ||
+                !isTrustedReleaseAssetUrl(checksumAsset.url)
+            ) {
+                return@withContext UpdateState.Error("Latest release contains an invalid APK or checksum asset.")
             }
 
             UpdateState.Available(
@@ -90,7 +97,7 @@ class UpdateRepository(private val context: Context) {
                     tagName = tagName,
                     apkName = apkAsset.name,
                     apkUrl = apkAsset.url,
-                    sha256Url = checksumAsset?.url,
+                    sha256Url = checksumAsset.url,
                     releaseNotes = release.optString("body").takeIf { body -> body.isNotBlank() }.orEmpty(),
                 )
             )
@@ -101,6 +108,13 @@ class UpdateRepository(private val context: Context) {
         info: UpdateInfo,
         onProgress: (bytesRead: Long, totalBytes: Long?) -> Unit,
     ): File = withContext(Dispatchers.IO) {
+        if (!isSafeApkAssetName(info.apkName) ||
+            !isTrustedReleaseAssetUrl(info.apkUrl) ||
+            !isTrustedReleaseAssetUrl(info.sha256Url)
+        ) {
+            throw SecurityException("Refusing to download an untrusted release asset.")
+        }
+
         val updatesDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "updates").apply { mkdirs() }
         val destination = File(updatesDir, info.apkName)
         val partial = File(updatesDir, "${info.apkName}.part")
@@ -136,15 +150,11 @@ class UpdateRepository(private val context: Context) {
             }
         }
 
-        info.sha256Url?.let { checksumUrl ->
-            val expected = fetchExpectedSha256(checksumUrl, info.apkName)
-            if (expected != null) {
-                val actual = partial.sha256()
-                if (!actual.equals(expected, ignoreCase = true)) {
-                    partial.delete()
-                    throw IllegalStateException("Downloaded APK checksum did not match the release checksum.")
-                }
-            }
+        val expected = fetchExpectedSha256(info.sha256Url, info.apkName)
+        val actual = partial.sha256()
+        if (!actual.equals(expected, ignoreCase = true)) {
+            partial.delete()
+            throw IllegalStateException("Downloaded APK checksum did not match the release checksum.")
         }
 
         if (destination.exists()) {
@@ -160,15 +170,22 @@ class UpdateRepository(private val context: Context) {
     private fun selectApkAsset(assets: List<ReleaseAsset>): ReleaseAsset? {
         Build.SUPPORTED_ABIS.forEach { abi ->
             assets.firstOrNull { asset ->
-                asset.name.endsWith("-$abi-release.apk", ignoreCase = true)
+                asset.name.endsWith("-$abi-release.apk", ignoreCase = true) &&
+                    isSafeApkAssetName(asset.name) &&
+                    isTrustedReleaseAssetUrl(asset.url)
             }?.let { return it }
         }
         return assets.firstOrNull { asset ->
-            asset.name.endsWith("-universal-release.apk", ignoreCase = true)
+            asset.name.endsWith("-universal-release.apk", ignoreCase = true) &&
+                isSafeApkAssetName(asset.name) &&
+                isTrustedReleaseAssetUrl(asset.url)
         }
     }
 
-    private fun fetchExpectedSha256(checksumUrl: String, apkName: String): String? {
+    private fun fetchExpectedSha256(checksumUrl: String, apkName: String): String {
+        if (!isTrustedReleaseAssetUrl(checksumUrl)) {
+            throw SecurityException("Refusing to fetch an untrusted checksum URL.")
+        }
         val connection = (URL(checksumUrl).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 10_000
@@ -179,15 +196,11 @@ class UpdateRepository(private val context: Context) {
 
         return connection.use {
             if (it.responseCode !in 200..299) {
-                return@use null
+                throw IllegalStateException("SHA-256 checksum download failed with HTTP ${it.responseCode}.")
             }
-            it.inputStream.bufferedReader().use { reader ->
-                reader.lineSequence()
-                    .map { line -> line.trim() }
-                    .firstOrNull { line -> line.endsWith(" $apkName") || line.endsWith("  $apkName") }
-                    ?.substringBefore(' ')
-                    ?.takeIf { hash -> hash.length == 64 }
-            }
+            val checksumText = it.inputStream.bufferedReader().use { reader -> reader.readText() }
+            parseExpectedSha256(checksumText, apkName)
+                ?: throw IllegalStateException("Release checksum file has no valid entry for ${apkName}.")
         }
     }
 
