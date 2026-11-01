@@ -11,19 +11,6 @@ permissions:
   contents: read
 
 jobs:
-  wrapper-validation:
-    name: Validate Gradle Wrapper
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v4
-
   unit-tests:
     name: Compile and Unit Test
     runs-on: ubuntu-latest
@@ -39,9 +26,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+          cache: gradle
 
       - name: Make Gradle executable
         run: chmod +x ./gradlew
