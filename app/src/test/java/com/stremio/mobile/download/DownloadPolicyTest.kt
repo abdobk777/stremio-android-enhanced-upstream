@@ -6,7 +6,7 @@ import org.junit.Test
 
 class DownloadPolicyTest {
     @Test
-    fun \`accepts secure direct video file URLs\`() {
+    fun `accepts secure direct video file URLs`() {
         assertEquals(
             "https://cdn.example/video.mp4?token=abc",
             DownloadPolicy.validateMediaUrlForTest("https://cdn.example/video.mp4?token=abc"),
@@ -18,7 +18,7 @@ class DownloadPolicyTest {
     }
 
     @Test
-    fun \`rejects insecure or manifest URLs\`() {
+    fun `rejects insecure or manifest URLs`() {
         assertNull(DownloadPolicy.validateMediaUrlForTest("http://cdn.example/video.mp4"))
         assertNull(DownloadPolicy.validateMediaUrlForTest("https://cdn.example/playlist.m3u8"))
         assertNull(DownloadPolicy.validateMediaUrlForTest("https://cdn.example/manifest.mpd"))
@@ -28,7 +28,7 @@ class DownloadPolicyTest {
     }
 
     @Test
-    fun \`sanitizes suggested local file names\`() {
+    fun `sanitizes suggested local file names`() {
         assertEquals(
             "A_Movie_2026-42.mp4",
             DownloadPolicy.fileName("A Movie/2026", "https://cdn.example/video.mp4", 42L),
