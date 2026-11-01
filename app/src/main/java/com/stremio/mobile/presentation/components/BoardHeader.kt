@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +25,7 @@ import com.stremio.mobile.core.theme.ScreenGutter
 @Composable
 fun BoardHeader(
     onOpenSearch: () -> Unit,
+    onOpenDownloads: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -44,6 +46,19 @@ fun BoardHeader(
             fontWeight = FontWeight.Normal,
         )
         Spacer(modifier = Modifier.weight(1f))
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clickable(onClick = onOpenDownloads),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Download,
+                contentDescription = "Downloads",
+                tint = Color.White,
+                modifier = Modifier.size(25.dp),
+            )
+        }
         Box(
             modifier = Modifier
                 .size(44.dp)

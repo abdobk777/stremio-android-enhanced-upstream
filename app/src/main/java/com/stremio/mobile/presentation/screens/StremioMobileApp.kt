@@ -83,6 +83,7 @@ import kotlin.math.roundToInt
 
 @Composable
 fun StremioMobileApp(viewModel: MainViewModel) {
+    var showDownloads by rememberSaveable { mutableStateOf(false) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val streamsState by viewModel.streamsState.collectAsStateWithLifecycle()
     val isPlayerOpen by viewModel.isPlayerOpen.collectAsStateWithLifecycle()
@@ -121,6 +122,7 @@ fun StremioMobileApp(viewModel: MainViewModel) {
                     state = state,
                     onRefresh = viewModel::refreshCatalogs,
                     onOpenSearch = viewModel::openSearch,
+                    onOpenDownloads = { showDownloads = true },
                     onSelectSection = viewModel::selectSection,
                     onOpenDetails = viewModel::openDetails,
                     onCloseDetails = viewModel::closeDetails,
@@ -184,11 +186,20 @@ fun StremioMobileApp(viewModel: MainViewModel) {
                 )
             }
 
+            if (showDownloads) {
+                BackHandler { showDownloads = false }
+                DownloadsScreen(
+                    onBack = { showDownloads = false },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
             if (state.account.isAuthenticated && state.isSearchOpen) {
                 SearchResultsScreen(
                     query = state.searchQuery,
                     results = state.searchResults,
                     shelves = state.searchShelves,
+                    suggestion = state.searchSuggestion,
                     onQueryChange = viewModel::search,
                     onOpenDetails = viewModel::openDetails,
                     onOpenDiscoverCatalog = viewModel::openDiscoverCatalog,
@@ -270,6 +281,7 @@ fun StremioMobileApp(viewModel: MainViewModel) {
                         }
                     },
                     onSelect = viewModel::playStream,
+                    onDownload = viewModel::downloadStream,
                     onSelectEpisode = viewModel::selectEpisode,
                     onSelectSeason = viewModel::selectSeason,
                     onSelectProvider = viewModel::selectStreamProvider,
@@ -649,6 +661,7 @@ private fun BoardScreen(
     state: com.stremio.mobile.presentation.state.MainUiState,
     onRefresh: () -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenDownloads: () -> Unit,
     onSelectSection: (MainSection) -> Unit,
     onOpenDetails: (CatalogItem) -> Unit,
     onCloseDetails: () -> Unit,
@@ -784,6 +797,7 @@ private fun BoardScreen(
             item {
                 BoardHeader(
                     onOpenSearch = onOpenSearch,
+                    onOpenDownloads = onOpenDownloads,
                 )
             }
             when (state.selectedSection) {

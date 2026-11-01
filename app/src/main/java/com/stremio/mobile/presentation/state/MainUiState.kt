@@ -23,6 +23,7 @@ data class MainUiState(
     val searchQuery: String = "",
     val searchResults: CatalogShelf = CatalogShelf(title = "Search", isLoading = false),
     val searchShelves: List<CatalogShelf> = emptyList(),
+    val searchSuggestion: String? = null,
     val library: CatalogShelf = CatalogShelf(title = "Library", isLoading = false),
     val addons: AddonsUiState = AddonsUiState(),
     val selectedAddonDetails: AddonDetailsUiState? = null,

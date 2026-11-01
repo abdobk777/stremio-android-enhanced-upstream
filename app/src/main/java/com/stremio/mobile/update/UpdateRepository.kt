@@ -18,7 +18,7 @@ data class UpdateInfo(
     val tagName: String,
     val apkName: String,
     val apkUrl: String,
-    val sha256Url: String?,
+    val sha256Url: String,
     val releaseNotes: String,
 )
 
@@ -81,7 +81,14 @@ class UpdateRepository(private val context: Context) {
             val apkAsset = selectApkAsset(parsedAssets)
                 ?: return@withContext UpdateState.Error("No compatible APK found for this device.")
             val checksumAsset = parsedAssets.firstOrNull { asset ->
-                asset.name.endsWith("-SHA256SUMS.txt", ignoreCase = true)
+                asset.name == "StremioMobile-v${remoteVersion}-SHA256SUMS.txt"
+            } ?: return@withContext UpdateState.Error("Latest release is missing its SHA-256 checksum file.")
+
+            if (!isSafeApkAssetName(apkAsset.name) ||
+                !isTrustedReleaseAssetUrl(apkAsset.url) ||
+                !isTrustedReleaseAssetUrl(checksumAsset.url)
+            ) {
+                return@withContext UpdateState.Error("Latest release contains an invalid APK or checksum asset.")
             }
 
             UpdateState.Available(
@@ -90,7 +97,7 @@ class UpdateRepository(private val context: Context) {
                     tagName = tagName,
                     apkName = apkAsset.name,
                     apkUrl = apkAsset.url,
-                    sha256Url = checksumAsset?.url,
+                    sha256Url = checksumAsset.url,
                     releaseNotes = release.optString("body").takeIf { body -> body.isNotBlank() }.orEmpty(),
                 )
             )
@@ -101,6 +108,13 @@ class UpdateRepository(private val context: Context) {
         info: UpdateInfo,
         onProgress: (bytesRead: Long, totalBytes: Long?) -> Unit,
     ): File = withContext(Dispatchers.IO) {
+        if (!isSafeApkAssetName(info.apkName) ||
+            !isTrustedReleaseAssetUrl(info.apkUrl) ||
+            !isTrustedReleaseAssetUrl(info.sha256Url)
+        ) {
+            throw SecurityException("Refusing to download an untrusted release asset.")
+        }
+
         val updatesDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "updates").apply { mkdirs() }
         val destination = File(updatesDir, info.apkName)
         val partial = File(updatesDir, "${info.apkName}.part")
@@ -108,13 +122,12 @@ class UpdateRepository(private val context: Context) {
             partial.delete()
         }
 
-        val connection = (URL(info.apkUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 15_000
-            readTimeout = 30_000
-            setRequestProperty("Accept", "application/vnd.android.package-archive")
-            setRequestProperty("User-Agent", "StremioMobile/${BuildConfig.VERSION_NAME}")
-        }
+        val connection = openTrustedReleaseAssetConnection(
+            initialUrl = info.apkUrl,
+            accept = "application/vnd.android.package-archive",
+            connectTimeoutMs = 15_000,
+            readTimeoutMs = 30_000,
+        )
 
         connection.use {
             if (it.responseCode !in 200..299) {
@@ -136,15 +149,11 @@ class UpdateRepository(private val context: Context) {
             }
         }
 
-        info.sha256Url?.let { checksumUrl ->
-            val expected = fetchExpectedSha256(checksumUrl, info.apkName)
-            if (expected != null) {
-                val actual = partial.sha256()
-                if (!actual.equals(expected, ignoreCase = true)) {
-                    partial.delete()
-                    throw IllegalStateException("Downloaded APK checksum did not match the release checksum.")
-                }
-            }
+        val expected = fetchExpectedSha256(info.sha256Url, info.apkName)
+        val actual = partial.sha256()
+        if (!actual.equals(expected, ignoreCase = true)) {
+            partial.delete()
+            throw IllegalStateException("Downloaded APK checksum did not match the release checksum.")
         }
 
         if (destination.exists()) {
@@ -160,35 +169,80 @@ class UpdateRepository(private val context: Context) {
     private fun selectApkAsset(assets: List<ReleaseAsset>): ReleaseAsset? {
         Build.SUPPORTED_ABIS.forEach { abi ->
             assets.firstOrNull { asset ->
-                asset.name.endsWith("-$abi-release.apk", ignoreCase = true)
+                asset.name.endsWith("-$abi-release.apk", ignoreCase = true) &&
+                    isSafeApkAssetName(asset.name) &&
+                    isTrustedReleaseAssetUrl(asset.url)
             }?.let { return it }
         }
         return assets.firstOrNull { asset ->
-            asset.name.endsWith("-universal-release.apk", ignoreCase = true)
+            asset.name.endsWith("-universal-release.apk", ignoreCase = true) &&
+                isSafeApkAssetName(asset.name) &&
+                isTrustedReleaseAssetUrl(asset.url)
         }
     }
 
-    private fun fetchExpectedSha256(checksumUrl: String, apkName: String): String? {
-        val connection = (URL(checksumUrl).openConnection() as HttpURLConnection).apply {
-            requestMethod = "GET"
-            connectTimeout = 10_000
-            readTimeout = 10_000
-            setRequestProperty("Accept", "text/plain")
-            setRequestProperty("User-Agent", "StremioMobile/${BuildConfig.VERSION_NAME}")
+    private fun fetchExpectedSha256(checksumUrl: String, apkName: String): String {
+        if (!isTrustedReleaseAssetUrl(checksumUrl)) {
+            throw SecurityException("Refusing to fetch an untrusted checksum URL.")
         }
+        val connection = openTrustedReleaseAssetConnection(
+            initialUrl = checksumUrl,
+            accept = "text/plain",
+            connectTimeoutMs = 10_000,
+            readTimeoutMs = 10_000,
+        )
 
         return connection.use {
             if (it.responseCode !in 200..299) {
-                return@use null
+                throw IllegalStateException("SHA-256 checksum download failed with HTTP ${it.responseCode}.")
             }
-            it.inputStream.bufferedReader().use { reader ->
-                reader.lineSequence()
-                    .map { line -> line.trim() }
-                    .firstOrNull { line -> line.endsWith(" $apkName") || line.endsWith("  $apkName") }
-                    ?.substringBefore(' ')
-                    ?.takeIf { hash -> hash.length == 64 }
+            val checksumText = it.inputStream.bufferedReader().use { reader -> reader.readText() }
+            parseExpectedSha256(checksumText, apkName)
+                ?: throw IllegalStateException("Release checksum file has no valid entry for ${apkName}.")
+        }
+    }
+
+    private fun openTrustedReleaseAssetConnection(
+        initialUrl: String,
+        accept: String,
+        connectTimeoutMs: Int,
+        readTimeoutMs: Int,
+    ): HttpURLConnection {
+        var currentUrl = URL(initialUrl)
+
+        repeat(MAX_RELEASE_REDIRECTS + 1) { redirectIndex ->
+            val connection = (currentUrl.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                instanceFollowRedirects = false
+                connectTimeout = connectTimeoutMs
+                readTimeout = readTimeoutMs
+                setRequestProperty("Accept", accept)
+                setRequestProperty("User-Agent", "StremioMobile/${BuildConfig.VERSION_NAME}")
+            }
+
+            val status = connection.responseCode
+            if (status in 300..399) {
+                val location = connection.getHeaderField("Location")
+                connection.disconnect()
+                if (location.isNullOrBlank() || redirectIndex == MAX_RELEASE_REDIRECTS) {
+                    throw IllegalStateException("GitHub release asset redirect could not be validated.")
+                }
+
+                val nextUrl = URL(currentUrl, location)
+                if (!isTrustedReleaseDeliveryUrl(nextUrl.toString())) {
+                    throw SecurityException("Release asset redirected to an untrusted host.")
+                }
+                currentUrl = nextUrl
+            } else {
+                if (!isTrustedReleaseDeliveryUrl(currentUrl.toString())) {
+                    connection.disconnect()
+                    throw SecurityException("Release asset resolved to an untrusted host.")
+                }
+                return connection
             }
         }
+
+        throw IllegalStateException("Too many GitHub release asset redirects.")
     }
 
     private fun File.sha256(): String {
@@ -228,6 +282,7 @@ class UpdateRepository(private val context: Context) {
 
     companion object {
         private const val LATEST_RELEASE_URL = "https://api.github.com/repos/perpetus/stremio-android/releases/latest"
+        private const val MAX_RELEASE_REDIRECTS = 5
         private val SEMVER_REGEX = Regex("""\d+\.\d+\.\d+""")
     }
 }

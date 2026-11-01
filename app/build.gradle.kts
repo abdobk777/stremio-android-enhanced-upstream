@@ -179,7 +179,12 @@ val streamServerRoot = when {
     submoduleStreamServerRoot.resolve("server/Cargo.toml").isFile -> submoduleStreamServerRoot
     else -> externalStreamServerRoot
 }
-val vcpkgRoot = stringPropertyOrEnv("VCPKG_ROOT") ?: "C:\\vcpkg"
+val defaultVcpkgRoot = if (org.apache.tools.ant.taskdefs.condition.Os.isFamily(org.apache.tools.ant.taskdefs.condition.Os.FAMILY_WINDOWS)) {
+    "C:/vcpkg"
+} else {
+    file("${System.getProperty("user.home")}/vcpkg").absolutePath
+}
+val vcpkgRoot = stringPropertyOrEnv("VCPKG_ROOT") ?: defaultVcpkgRoot
 
 streamServerTargets.forEach { target ->
     tasks.register<Exec>("buildStreamServer${target.taskSuffix}") {
@@ -227,8 +232,32 @@ tasks.register<Copy>("copyStreamServerJniLibs") {
     into("src/main/jniLibs")
 }
 
-// Disabled automatic compilation to speed up builds.
-// Run compileNativeLibs task to compile native libraries.
-// tasks.named("preBuild") {
-//     dependsOn("copyStreamServerJniLibs")
-// }
+// The stream-server is a required runtime dependency, not an optional feature.
+// Keep compilation separate for faster local builds, but never package an APK without
+// the JNI library for every ABI the app advertises.
+val verifyStreamServerJniLibs = tasks.register("verifyStreamServerJniLibs") {
+    group = "verification"
+    description = "Verifies that the Rust stream-server JNI library is staged for every supported ABI."
+
+    val expectedLibraries = supportedAbis.map { file("src/main/jniLibs/$it/libstream_server.so") }
+    inputs.files(expectedLibraries)
+
+    doLast {
+        val missingLibraries = expectedLibraries.filterNot { it.isFile && it.length() > 0L }
+        if (missingLibraries.isNotEmpty()) {
+            val missingPaths = missingLibraries.joinToString("\n") {
+                " - ${it.relativeTo(projectDir).invariantSeparatorsPath}"
+            }
+            throw GradleException(
+                "The APK cannot be packaged because stream-server JNI libraries are missing:\n" +
+                    "$missingPaths\n" +
+                    "Build or download libstream_server.so for all supported ABIs, then retry. " +
+                    "CI builds these libraries before running Gradle.",
+            )
+        }
+    }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(verifyStreamServerJniLibs)
+}
