@@ -163,7 +163,9 @@ jobs:
           OPENSSL_DIR: ${{ github.workspace }}/vcpkg_installed-${{ matrix.abi }}/${{ matrix.vcpkg-triplet }}
         run: |
           set -euo pipefail
-          export ANDROID_NDK_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}/ndk/27.2.12479018"
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          test -n "${sdk_root}"
+          export ANDROID_NDK_HOME="${sdk_root}/ndk/27.2.12479018"
           cargo ndk --target ${{ matrix.rust-target }} --platform 24 build --release --features libtorrent --no-default-features --locked
 
       - name: Verify and stage JNI library
