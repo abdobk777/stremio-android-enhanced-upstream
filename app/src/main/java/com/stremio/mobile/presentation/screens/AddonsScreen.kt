@@ -1,11 +1,14 @@
 package com.stremio.mobile.presentation.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -124,13 +127,19 @@ fun AddonsHeaderAndControls(
                         unfocusedTextColor = Color.White,
                     ),
                 )
-                ThemedButton(
-                    text = "Add",
+                Button(
                     onClick = {
                         if (onInstallByUrl(urlInput)) urlInput = "" else urlError = true
                     },
-                    containerColor = AccentPurple,
-                )
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentPurple,
+                        contentColor = Color.White,
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    Text("Add", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                }
             }
             if (urlError) {
                 Text(
@@ -139,6 +148,27 @@ fun AddonsHeaderAndControls(
                     fontSize = 12.sp,
                 )
             }
+        }
+
+        Button(
+            onClick = {
+                if (!onInstallByUrl("https://torrentio.strem.fun/manifest.json")) {
+                    urlError = true
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AccentPurple,
+                contentColor = Color.White,
+            ),
+            shape = RoundedCornerShape(14.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        ) {
+            Text(
+                text = "Add Torrentio · Community addon",
+                color = Color.White,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            )
         }
 
         if (state.selectableCatalogs.isNotEmpty() || state.selectableTypes.isNotEmpty()) {
