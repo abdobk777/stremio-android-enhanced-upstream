@@ -34,7 +34,7 @@ class TitleFuzzyMatcherTest {
         assertEquals(
             "Spider-Man: Across the Spider-Verse",
             TitleFuzzyMatcher.bestMatch(
-                "Spider Man Across the Spider Verse",
+                "Spider Man Aross the Spider Verse",
                 listOf("Spider-Man: Across the Spider-Verse", "The Office"),
             ),
         )
