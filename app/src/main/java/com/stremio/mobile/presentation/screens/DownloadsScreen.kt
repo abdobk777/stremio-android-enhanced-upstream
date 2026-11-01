@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.stremio.mobile.core.theme.StremioBackgroundBrush
 import kotlinx.coroutines.delay
 
 private data class DownloadEntry(
@@ -90,7 +92,7 @@ fun DownloadsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     }
 
     Column(
-        modifier = modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 12.dp),
+        modifier = modifier.fillMaxSize().background(StremioBackgroundBrush).padding(horizontal = 18.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
