@@ -271,6 +271,7 @@ fun StremioMobileApp(viewModel: MainViewModel) {
                         }
                     },
                     onSelect = viewModel::playStream,
+                    onDownload = viewModel::downloadStream,
                     onSelectEpisode = viewModel::selectEpisode,
                     onSelectSeason = viewModel::selectSeason,
                     onSelectProvider = viewModel::selectStreamProvider,
