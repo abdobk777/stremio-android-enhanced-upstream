@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -186,7 +187,7 @@ fun DetailSheet(
                 )
             }
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 6.dp),
@@ -210,6 +211,16 @@ fun DetailSheet(
                         .height(52.dp),
                     enabled = !details.isLoading,
                     tint = AccentGreen,
+                )
+                DetailLiquidActionButton(
+                    label = "Download",
+                    imageVector = Icons.Outlined.FileDownload,
+                    onClick = onOpenStreams,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
+                    enabled = !details.isLoading,
+                    tint = AccentPurple,
                 )
             }
         }
