@@ -28,7 +28,7 @@ V1 exposes a download action only when a stream is a direct `Stream.Source.Url` 
 - AVI
 - M4V
 
-The download is queued with Android DownloadManager and saved under the app-specific external Downloads directory. Android supplies the background transfer and system notification.
+The download is queued with Android DownloadManager and saved under the app-specific external Downloads directory. Android supplies the background transfer and system notification. The app's Downloads screen queries the app's DownloadManager records and displays status, progress, downloaded size, and failure reason. Completed files can be opened with an installed video player; active or completed items can be removed.
 
 ### Deliberately excluded
 
@@ -40,9 +40,8 @@ The download is queued with Android DownloadManager and saved under the app-spec
 
 ### Not included in V1
 
-- In-app download history or queue screen
-- In-app pause, resume, cancel, and delete controls
-- Playing downloaded files from an in-app offline library
+- App-controlled pause and resume controls (the current DownloadManager integration does not expose these controls)
+- Rich offline-library playback integrated into the Stremio player
 - HLS/DASH segment packaging or torrent persistence
 - Explicit file-size limits, checksum validation, or server MIME verification for media downloads
 
