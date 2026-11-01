@@ -29,6 +29,7 @@ import com.stremio.mobile.update.ApkInstaller
 import com.stremio.mobile.update.UpdateInfo
 import com.stremio.mobile.update.UpdateRepository
 import com.stremio.mobile.update.UpdateState
+import com.stremio.mobile.search.TitleFuzzyMatcher
 
 import java.io.File
 import java.net.HttpURLConnection
@@ -73,6 +74,7 @@ class MainViewModel(
     private val searchQuery = MutableStateFlow("")
     private val searchResults = MutableStateFlow(CatalogShelf(title = "Search", isLoading = false))
     private val searchShelves = MutableStateFlow<List<CatalogShelf>>(emptyList())
+    private val searchSuggestion = MutableStateFlow<String?>(null)
     private val isSearchOpen = MutableStateFlow(false)
     private val library = MutableStateFlow(CatalogShelf(title = "Library", isLoading = false))
     private val addons = MutableStateFlow(AddonsUiState())
@@ -217,6 +219,7 @@ class MainViewModel(
             _updateState,
             isAutoUpdateEnabled,
             playerUiStyle,
+            searchSuggestion,
         )
     ) { values ->
         MainUiState(
@@ -238,6 +241,7 @@ class MainViewModel(
             searchQuery = values[6] as String,
             searchResults = values[7] as CatalogShelf,
             searchShelves = values[19] as List<CatalogShelf>,
+            searchSuggestion = values[52] as String?,
             library = values[8] as CatalogShelf,
             addons = values[9] as AddonsUiState,
             selectedDetails = values[10] as MetaDetails?,
@@ -1718,6 +1722,7 @@ class MainViewModel(
     fun search(query: String) {
         searchQuery.value = query
         searchJob?.cancel()
+        searchSuggestion.value = null
         val trimmed = query.trim()
         if (trimmed.isBlank()) {
             searchResults.value = CatalogShelf(title = "Search", isLoading = false)
@@ -1726,6 +1731,7 @@ class MainViewModel(
         searchResults.value = CatalogShelf(title = "Search", isLoading = true)
         searchShelves.value = emptyList()
         searchJob = viewModelScope.launch {
+            searchSuggestion.value = withContext(Dispatchers.Default) { suggestLocalTitle(trimmed) }
             delay(300)
             val collector = launch {
                 catalogRepository.search(trimmed)
@@ -1766,6 +1772,17 @@ class MainViewModel(
         }
     }
 
+    private fun suggestLocalTitle(query: String): String? {
+        val localTitles = buildList {
+            addAll(library.value.items.map { it.name })
+            addAll(continueWatching.value.items.map { it.name })
+            boardShelves.value.forEach { shelf -> addAll(shelf.items.map { it.name }) }
+            addAll(discoverCatalog.value.items.map { it.name })
+        }.distinct()
+
+        return TitleFuzzyMatcher.bestMatch(query, localTitles)
+    }
+
     fun openSearch() {
         isSearchOpen.value = true
     }
@@ -1777,6 +1794,7 @@ class MainViewModel(
         searchQuery.value = ""
         searchResults.value = CatalogShelf(title = "Search", isLoading = false)
         searchShelves.value = emptyList()
+        searchSuggestion.value = null
     }
 
     fun openDetails(item: CatalogItem) {
