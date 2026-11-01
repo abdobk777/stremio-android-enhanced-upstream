@@ -51,6 +51,7 @@ The official app is the official support channel. This app is the open-source, n
 - **Stremio account integration** for synced library, addons, profile settings, and continue watching.
 - **Addon discovery and detail pages** for browsing, installing, and managing Stremio addons.
 - **Stream selection and playback** for direct HTTP streams and local streaming-server URLs.
+- **Offline file download (V1)** for eligible direct HTTPS MP4, MKV, WebM, MOV, AVI, and M4V sources through Android DownloadManager, with system notifications. Torrent streams, external-player links, HLS, and DASH are not treated as direct file downloads.
 - **Dual internal player backends** with ExoPlayer as default and MPV as an optional internal player.
 - **Vendored MPV Android library** under `third_party/mpv-android-lib` with supported `armeabi-v7a`, `arm64-v8a`, `x86`, and `x86_64` native outputs.
 - **Web-parity audio and subtitle controls** including language defaults, subtitle variants, local subtitle import, styling, delay, size, and position controls.
@@ -225,6 +226,9 @@ third_party/mpv-android-lib/rebuild-native.sh
 The MPV rebuild script is intended for Linux/macOS environments. stream-server native builds can be run per ABI through the Gradle `copyStreamServerJniLibs` helper; Gradle can run those native ABI tasks in parallel when invoked with `--parallel`.
 
 ## Development Notes
+
+- Smart Search typo suggestions compare the query against locally cached titles from the library, continue-watching, home, and Discover shelves. This suggestion index is not a complete remote/add-on search index.
+- Offline downloads V1 queues supported direct HTTPS files with Android DownloadManager. There is not yet an in-app download library with pause, resume, cancel, delete, or local playback integration.
 
 - Gradle build cache and configuration cache are enabled.
 - ExoPlayer remains the default player backend.
