@@ -27,10 +27,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +52,7 @@ import com.stremio.mobile.core.theme.AccentPurple
 import com.stremio.mobile.core.theme.GlassSurface
 import com.stremio.mobile.core.theme.MutedText
 import com.stremio.mobile.core.theme.StremioBackgroundBrush
+import com.stremio.mobile.download.DownloadPolicy
 import com.stremio.mobile.data.model.EpisodeOption
 import com.stremio.mobile.data.model.StreamOption
 import com.stremio.mobile.data.model.StreamSortCriterion
@@ -67,6 +70,7 @@ fun StreamsSheet(
     preferredQuality: String,
     onBack: () -> Unit,
     onSelect: (StreamOption) -> Unit,
+    onDownload: (StreamOption) -> Unit,
     onSelectEpisode: (EpisodeOption) -> Unit,
     onSelectSeason: (Int) -> Unit,
     onSelectProvider: (String?) -> Unit,
@@ -294,7 +298,9 @@ fun StreamsSheet(
                             StreamRow(
                                 option = option,
                                 enabled = !state.isResolving,
-                                onSelect = { onSelect(option) }
+                                canDownload = DownloadPolicy.directDownloadUrl(option.core.stream) != null,
+                                onSelect = { onSelect(option) },
+                                onDownload = { onDownload(option) },
                             )
                         }
                     }
@@ -400,7 +406,9 @@ private fun EpisodeRow(
 private fun StreamRow(
     option: StreamOption,
     enabled: Boolean,
+    canDownload: Boolean,
     onSelect: () -> Unit,
+    onDownload: () -> Unit,
 ) {
     ThemedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -558,6 +566,19 @@ private fun StreamRow(
                     fontSize = 12.sp,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (canDownload) {
+            IconButton(
+                onClick = onDownload,
+                enabled = enabled,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.FileDownload,
+                    contentDescription = "Download for offline use",
+                    tint = if (enabled) AccentPurple else MutedText,
                 )
             }
         }
