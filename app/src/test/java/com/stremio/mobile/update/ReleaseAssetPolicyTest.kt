@@ -64,6 +64,23 @@ class ReleaseAssetPolicyTest {
     }
 
     @Test
+    fun `allows GitHub owned release delivery redirects only`() {
+        assertTrue(
+            isTrustedReleaseDeliveryUrl(
+                "https://release-assets.githubusercontent.com/github-production-release-asset/123/file?token=abc",
+            ),
+        )
+        assertTrue(
+            isTrustedReleaseDeliveryUrl(
+                "https://github.com/perpetus/stremio-android/releases/download/v1.2.3/app.apk",
+            ),
+        )
+        assertFalse(isTrustedReleaseDeliveryUrl("http://release-assets.githubusercontent.com/file"))
+        assertFalse(isTrustedReleaseDeliveryUrl("https://release-assets.githubusercontent.com.attacker.invalid/file"))
+        assertFalse(isTrustedReleaseDeliveryUrl("https://example.com/file"))
+    }
+
+    @Test
     fun `accepts only known release APK file names`() {
         assertTrue(isSafeApkAssetName("StremioMobile-v1.2.3-arm64-v8a-release.apk"))
         assertTrue(isSafeApkAssetName("StremioMobile-v1.2.3-universal-release.apk"))
