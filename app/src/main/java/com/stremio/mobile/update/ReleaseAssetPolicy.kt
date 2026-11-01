@@ -4,7 +4,7 @@ import java.net.URI
 import java.util.Locale
 
 private val APK_ASSET_NAME = Regex(
-    """^StremioMobile-v\\d+\\.\\d+\\.\\d+-(?:armeabi-v7a|arm64-v8a|x86|x86_64|universal)-release\\.apk$""",
+    """^StremioMobile-v\d+\.\d+\.\d+-(?:armeabi-v7a|arm64-v8a|x86|x86_64|universal)-release\.apk$""",
     RegexOption.IGNORE_CASE,
 )
 
@@ -13,7 +13,7 @@ private val RELEASE_ASSET_PATH = Regex(
     RegexOption.IGNORE_CASE,
 )
 
-private val SHA256_LINE = Regex("""^([0-9a-fA-F]{64})[ \\t]+\\*?(.+?)$""")
+private val SHA256_LINE = Regex("""^([0-9a-fA-F]{64})[ \t]+\*?(.+?)$""")
 
 internal fun isSafeApkAssetName(name: String): Boolean =
     APK_ASSET_NAME.matches(name)
