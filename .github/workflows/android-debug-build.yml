@@ -85,7 +85,11 @@ jobs:
             exit 1
           fi
 
+          # sdkmanager may close stdin as soon as all licenses are accepted;
+          # with pipefail enabled that can surface as a harmless SIGPIPE from yes.
+          set +o pipefail
           yes | "${sdkmanager_path}" --sdk_root="${sdk_root}" --licenses >/dev/null
+          set -o pipefail
           "${sdkmanager_path}" --sdk_root="${sdk_root}" --install "ndk;27.2.12479018"
           echo "ANDROID_NDK_HOME=${sdk_root}/ndk/27.2.12479018" >> "${GITHUB_ENV}"
 
