@@ -71,6 +71,7 @@ fun SearchResultsScreen(
     query: String,
     results: CatalogShelf,
     shelves: List<CatalogShelf>,
+    suggestion: String?,
     onQueryChange: (String) -> Unit,
     onOpenDetails: (CatalogItem) -> Unit,
     onOpenDiscoverCatalog: (com.stremio.core.types.addon.ResourceRequest, String) -> Unit,
@@ -185,12 +186,31 @@ fun SearchResultsScreen(
 
             results.items.isEmpty() -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = results.error ?: "No results for \"$query\".",
-                        color = MutedText,
-                        fontSize = 15.sp,
-                        modifier = Modifier.padding(horizontal = ScreenGutter),
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = results.error ?: "No results for \"$query\".",
+                            color = MutedText,
+                            fontSize = 15.sp,
+                            modifier = Modifier.padding(horizontal = ScreenGutter),
+                        )
+                        if (suggestion != null) {
+                            Text(
+                                text = "Did you mean \"$suggestion\"?",
+                                color = AccentPurple,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .padding(top = 12.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        focusManager.clearFocus()
+                                        keyboard?.hide()
+                                        onQueryChange(suggestion)
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                            )
+                        }
+                    }
                 }
             }
 
