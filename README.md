@@ -228,7 +228,7 @@ The MPV rebuild script is intended for Linux/macOS environments. stream-server n
 ## Development Notes
 
 - Smart Search typo suggestions compare the query against locally cached titles from the library, continue-watching, home, and Discover shelves. This suggestion index is not a complete remote/add-on search index.
-- Offline downloads V1 queues supported direct HTTPS files with Android DownloadManager. There is not yet an in-app download library with pause, resume, cancel, delete, or local playback integration.
+- Offline downloads V1 queues supported direct HTTPS files with Android DownloadManager. The app includes a Downloads screen with progress, remove/cancel, and open/play actions. DownloadManager does not expose app-controlled pause/resume in this implementation.
 
 - Gradle build cache and configuration cache are enabled.
 - ExoPlayer remains the default player backend.
