@@ -83,6 +83,7 @@ import kotlin.math.roundToInt
 
 @Composable
 fun StremioMobileApp(viewModel: MainViewModel) {
+    var showDownloads by rememberSaveable { mutableStateOf(false) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val streamsState by viewModel.streamsState.collectAsStateWithLifecycle()
     val isPlayerOpen by viewModel.isPlayerOpen.collectAsStateWithLifecycle()
@@ -121,6 +122,7 @@ fun StremioMobileApp(viewModel: MainViewModel) {
                     state = state,
                     onRefresh = viewModel::refreshCatalogs,
                     onOpenSearch = viewModel::openSearch,
+                    onOpenDownloads = { showDownloads = true },
                     onSelectSection = viewModel::selectSection,
                     onOpenDetails = viewModel::openDetails,
                     onCloseDetails = viewModel::closeDetails,
@@ -181,6 +183,14 @@ fun StremioMobileApp(viewModel: MainViewModel) {
                     onFacebookLoginError = viewModel::setAccountError,
                     onSignup = viewModel::signup,
                     onClearError = viewModel::clearAccountError,
+                )
+            }
+
+            if (showDownloads) {
+                BackHandler { showDownloads = false }
+                DownloadsScreen(
+                    onBack = { showDownloads = false },
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
 
@@ -651,6 +661,7 @@ private fun BoardScreen(
     state: com.stremio.mobile.presentation.state.MainUiState,
     onRefresh: () -> Unit,
     onOpenSearch: () -> Unit,
+    onOpenDownloads: () -> Unit,
     onSelectSection: (MainSection) -> Unit,
     onOpenDetails: (CatalogItem) -> Unit,
     onCloseDetails: () -> Unit,
@@ -786,6 +797,7 @@ private fun BoardScreen(
             item {
                 BoardHeader(
                     onOpenSearch = onOpenSearch,
+                    onOpenDownloads = onOpenDownloads,
                 )
             }
             when (state.selectedSection) {
